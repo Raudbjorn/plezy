@@ -96,6 +96,7 @@ import '../utils/snackbar_helper.dart';
 import '../utils/stream_buffer_sizing.dart';
 import '../utils/video_player_navigation.dart';
 import '../utils/android_exit_diagnostics.dart';
+import 'video_player/apple_tv_transport_arbiter.dart';
 import 'video_player/completion_latch.dart';
 import 'video_player/episode_session_state.dart';
 import 'video_player/first_frame_gate.dart';
@@ -790,6 +791,12 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// Media-controls listeners created once per attempt by [_initializeServices].
   final List<StreamSubscription<dynamic>> _mediaControlSubscriptions = [];
   StreamSubscription<AppleTvRemotePlayPauseAction>? _appleTvPlayPauseSubscription;
+
+  /// tvOS routes one Play/Pause press to either the native remote bridge or
+  /// the OS media session depending on whether the audio session is active,
+  /// so the screen listens to both and lets this collapse a press that
+  /// arrives on both at once.
+  final AppleTvTransportArbiter _appleTvTransport = AppleTvTransportArbiter();
   TrackManager? _trackManager;
   StreamSubscription<void>? _sleepTimerSubscription;
   bool _isHandlingBack = false;
@@ -1328,6 +1335,23 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// standing up the full service layer.
   @visibleForTesting
   MediaControlRouter debugMediaControlRouterForTesting() => _buildMediaControlRouter();
+
+  /// Drive one OS media-session event through the subscription's own
+  /// admission policy — the Apple TV surface arbitration included — rather
+  /// than straight into the router.
+  @visibleForTesting
+  void debugHandleMediaControlEventForTesting(MediaControlEvent event, {MediaControlRouter? router}) =>
+      _handleMediaControlEvent(event, router ?? _buildMediaControlRouter());
+
+  /// Stand in for a completed player open, which the transport paths that
+  /// speak for a hardware remote require before they will act.
+  @visibleForTesting
+  void debugMarkPlayerInitializedForTesting() => _isPlayerInitialized = true;
+
+  /// The native Apple TV Play/Pause bridge, as the remote's listener calls it.
+  @visibleForTesting
+  Future<void> debugHandleAppleTvRemotePlayPauseForTesting() =>
+      _handleAppleTvRemotePlayPause(const AppleTvRemotePlayPauseAction(source: 'presses', detail: 'playPause'));
 
   late final PlayerNavigationCoordinator _playerNavigationCoordinator;
 
@@ -2623,6 +2647,10 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
       'Apple TV remote play/pause received source=${action.source}'
       '${action.detail == null ? '' : ' detail=${action.detail}'}',
     );
+    if (!_appleTvTransport.accept()) {
+      appLogger.d('Apple TV remote play/pause ignored: same press already handled by the OS media session');
+      return;
+    }
     await _remoteTransport(TransportCommand.toggle, source: 'Apple TV remote');
   }
 
