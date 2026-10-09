@@ -791,10 +791,10 @@ void main() {
     _expectFocusedChannel(tester, 'A');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    // The window opens an hour before the current half-hour, so what airs
-    // now is always the third slot.
-    expect(find.ancestor(of: find.text('Slot 3'), matching: _focusedCellFinder(tester)), findsOneWidget);
-    for (var i = 0; i < 5; i++) {
+    // The window opens at the current half-hour, so what airs now is always
+    // the first slot.
+    expect(find.ancestor(of: find.text('Slot 1'), matching: _focusedCellFinder(tester)), findsOneWidget);
+    for (var i = 0; i < 7; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pumpAndSettle();
     }
@@ -822,7 +822,7 @@ void main() {
     await _focusGrid(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.ancestor(of: find.text('Slot 3'), matching: _focusedCellFinder(tester)), findsOneWidget);
+    expect(find.ancestor(of: find.text('Slot 1'), matching: _focusedCellFinder(tester)), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
