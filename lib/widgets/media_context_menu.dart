@@ -669,11 +669,18 @@ class MediaContextMenuState extends State<MediaContextMenu> {
           icon: Symbols.delete_outline_rounded,
           label: t.collections.removeFromCollection,
         ),
+      // Continue Watching rows are exactly where jumping to the parent show or
+      // season is most useful, so they are not excluded.
       if ((mediaKind == MediaKind.episode || mediaKind == MediaKind.season) &&
           itemSeriesKey != null &&
-          !widget.isInContinueWatching &&
           ancestorSeriesKey != itemSeriesKey)
         _MenuAction(value: 'series', icon: Symbols.tv_rounded, label: t.mediaMenu.goToSeries),
+      // Go to Season (episodes only) — hidden when already on that season's
+      // detail screen.
+      if (mediaKind == MediaKind.episode &&
+          mediaItem.parentId != null &&
+          !(ancestorMeta?.kind == MediaKind.season && ancestorMeta?.id == mediaItem.parentId))
+        _MenuAction(value: 'season', icon: Symbols.folder_rounded, label: t.mediaMenu.goToSeason),
       if (mediaKind == MediaKind.show || mediaKind == MediaKind.season)
         _MenuAction(value: 'shuffle_play', icon: Symbols.shuffle_rounded, label: t.mediaMenu.shufflePlay),
       ..._mediaSourceMenuActions(menu, mediaItem),
@@ -921,6 +928,12 @@ class MediaContextMenuState extends State<MediaContextMenu> {
       case 'series':
         outcome.didNavigate = true;
         await _navigateToSeries(context, mediaItem);
+        break;
+      case 'season':
+        outcome.didNavigate = true;
+        await _navigateToRelated(context, mediaItem.parentId, (context, season) async {
+          await Navigator.push(context, mediaDetailRoute(metadata: season, initialEpisodeId: mediaItem.id));
+        }, t.messages.errorLoadingSeason);
         break;
       case 'shuffle_play':
         await _handleShufflePlayWithQueue(context);
