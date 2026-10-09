@@ -1498,6 +1498,7 @@
     "channelNumber": "Kanal ${number}",
     "unknownChannel": "Unbekannter Kanal",
     "live": "LIVE",
+    "newProgram": "",
     "reloadGuide": "TV-Programm neu laden",
     "searchGuide": "TV-Programm durchsuchen",
     "searchHint": "Kanäle & Sendungen suchen",
