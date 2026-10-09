@@ -1,0 +1,137 @@
+name: Sync Upstream Main
+run-name: Merge edde746/plezy main into fork
+
+# Merges edde746/plezy main into this fork's main on demand.
+#
+# Workflow files are never changed by a sync: GITHUB_TOKEN cannot push edits to
+# .github/workflows, so after the merge every workflow is restored exactly as
+# it is on the fork's HEAD and workflows that only exist upstream are dropped.
+# Upstream workflow changes must be brought over by hand.
+# Generated translation conflicts are resolved only by deterministic
+# regeneration; any real source-code conflict aborts the sync for review.
+# Manual dispatch only. To sync hourly, add under `on:`:
+#   schedule:
+#     - cron: '5 * * * *'
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.47.1'
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'Raudbjorn/plezy' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout maintained fork without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Flutter for deterministic generated-file resolution
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: false
+
+      - name: Merge upstream main and pin workflows to the fork
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git remote add upstream https://github.com/edde746/plezy.git
+          git fetch --no-tags upstream main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo 'Fork main already contains upstream main.'
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          FORK_HEAD="$(git rev-parse HEAD)"
+          GENERATED_TRANSLATIONS=(
+            'lib/i18n/strings.g.dart'
+            'lib/i18n/strings_en.g.dart'
+          )
+          REGENERATE_TRANSLATIONS=false
+
+          set +e
+          git merge --no-commit --no-ff upstream/main
+          MERGE_STATUS=$?
+          set -e
+
+          if [ "$MERGE_STATUS" -ne 0 ]; then
+            mapfile -t CONFLICTS < <(git diff --name-only --diff-filter=U)
+            for path in "${CONFLICTS[@]}"; do
+              case "$path" in
+                .github/workflows/*.yml|.github/workflows/*.yaml)
+                  ;;
+                lib/i18n/strings.g.dart|lib/i18n/strings_en.g.dart)
+                  git checkout --ours -- "$path"
+                  git add -- "$path"
+                  REGENERATE_TRANSLATIONS=true
+                  ;;
+                *)
+                  echo "Upstream source conflict requires review: $path" >&2
+                  git merge --abort
+                  exit 1
+                  ;;
+              esac
+            done
+          fi
+
+          # Pin every workflow to the fork's HEAD: restore the ones it has and
+          # remove any that only exist upstream.
+          git ls-tree -r --name-only "$FORK_HEAD" -- .github/workflows |
+            while IFS= read -r path; do git checkout "$FORK_HEAD" -- "$path"; done
+          while IFS= read -r path; do
+            if ! git cat-file -e "$FORK_HEAD:$path" 2>/dev/null; then
+              git rm -f --ignore-unmatch -- "$path"
+            fi
+          done < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print | sort)
+
+          if [ "$REGENERATE_TRANSLATIONS" = true ]; then
+            flutter pub get --enforce-lockfile --no-example
+            rm -f "${GENERATED_TRANSLATIONS[@]}"
+            scripts/codegen.sh
+            git add -- "${GENERATED_TRANSLATIONS[@]}"
+          fi
+
+          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+            echo 'Unresolved merge conflicts remain; refusing to push.' >&2
+            git merge --abort
+            exit 1
+          fi
+
+          git add -A .github/workflows
+          git diff --check --cached
+          git commit -m 'chore: sync upstream main'
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Push clean merge with short-lived authentication
+        if: steps.merge.outputs.changed == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          AUTH="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          trap 'unset AUTH GITHUB_TOKEN' EXIT
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH" push https://github.com/${GITHUB_REPOSITORY}.git HEAD:main
