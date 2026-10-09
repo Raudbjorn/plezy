@@ -209,8 +209,7 @@ Unofficial fork of [edde746/plezy](https://github.com/edde746/plezy) that tracks
 - **Browse** — Continue Watching shows the next unwatched episode after playback and waits for the server to settle before refreshing; per-episode cast on the TV detail screen; "Go to Season" in the media context menu; playlist Play resumes at the first unfinished item (with a "play from beginning" option).
 - **Android development** — debug builds use the `com.edde746.plezy.dev` application ID, so they install beside the production app without sharing its data; the Maestro scripts target that ID.
 - **CI** — `Sync Upstream Main` (manual dispatch) merges upstream `main` into this fork's `main`. It never touches workflow files and aborts on any real source conflict.
-
-Not merged yet: the Live TV guide badge and alignment series lives on `integrate/guide-badges`, pending review.
+- **Live TV guide** — LIVE and NEW badges on guide cards, program details and the player, themed and focus-aware; episode subtext; the guide window opens at the current half hour; wider program cards and a compact channel column on mobile.
 
 ## Building from Source
 
