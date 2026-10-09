@@ -198,20 +198,51 @@ Older relays still accept explicit create/join, but failed recovery requires joi
 [^rt]: Real-time scrobbling on Trakt and Simkl; MyAnimeList and AniList update on completion.
 [^shelf]: Android TV / Fire TV and tvOS.
 
+## Raudbjorn fork
+
+Unofficial fork of [edde746/plezy](https://github.com/edde746/plezy) that tracks upstream `main` and carries a small set of extra fixes and features, most of them adapted from community forks (authorship is preserved on each commit; `git log` shows the original author and a `cherry picked from` trailer where one applies).
+
+**What this fork adds**
+
+- **Playback** — suppresses transient play/pause events during ExoPlayer seeks (fixes seeking glitches on Android); the Apple TV remote's Play/Pause now resumes as well as pauses; cancelling the play-next dialog exits the player instead of leaving a black screen.
+- **Artwork** — poster cache keys no longer depend on the server endpoint (fixes black posters when a server is reachable by several URLs), and `serverArtworkProvider` accepts an explicit `cacheKey`.
+- **Browse** — Continue Watching shows the next unwatched episode after playback and waits for the server to settle before refreshing; per-episode cast on the TV detail screen; "Go to Season" in the media context menu; playlist Play resumes at the first unfinished item (with a "play from beginning" option).
+- **Android development** — debug builds use the `com.edde746.plezy.dev` application ID, so they install beside the production app without sharing its data; the Maestro scripts target that ID.
+- **CI** — `Sync Upstream Main` (manual dispatch) merges upstream `main` into this fork's `main`. It never touches workflow files and aborts on any real source conflict.
+
+Not merged yet: the Live TV guide badge and alignment series lives on `integrate/guide-badges`, pending review.
+
 ## Building from Source
 
 ### Prerequisites
-- Flutter SDK 3.47.0+
+- Flutter SDK 3.47.1 (the version CI pins; 3.47.0+ is the minimum)
 - A Plex account, or a Jellyfin or Emby server with user credentials
+- Per target: Android SDK and Java 17 (Android), Xcode (iOS/macOS/tvOS), `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev` (Linux), Visual Studio with the C++ desktop workload (Windows)
 
 ### Setup
 
 ```bash
-git clone https://github.com/edde746/plezy.git
+git clone https://github.com/Raudbjorn/plezy.git
 cd plezy
 flutter pub get
-scripts/codegen.sh
-flutter run
+scripts/codegen.sh   # translations + generated Dart models; required before the first build
+flutter run          # pick a device with -d, e.g. -d linux
+```
+
+### Release builds
+
+```bash
+flutter build linux --release        # also: windows, macos, apk, appbundle, ios
+```
+
+Linux release bundles need pinned libmpv and bundled libraries that `flutter build linux` alone does not produce; see [the Linux release workflow](.github/workflows/build.yml) and `scripts/fetch_linux_libmpv.py`. Upstream's signing, store, and notarization steps need secrets this fork does not have, so only local, unsigned builds are supported.
+
+### Tests and checks
+
+```bash
+scripts/run_tests.sh   # flutter test, scaled to your core count
+flutter analyze
+scripts/codegen.sh --check
 ```
 
 <details>
